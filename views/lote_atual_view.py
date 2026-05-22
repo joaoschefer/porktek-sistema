@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QWidget, QLabel, QVBoxLayout, QPushButton, QFrame
+    QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QFrame
 )
 from services.lote_service import buscar_lote_ativo
 from config.window_config import (
@@ -15,6 +15,7 @@ class LoteAtualView(QWidget):
         super().__init__()
 
         self.dados_usuario = dados_usuario
+        self.lote_id = None
 
         self.setWindowTitle("Sistema de Suínos - Lote Ativo")
         self.resize(DEFAULT_WIDTH, DEFAULT_HEIGHT)
@@ -60,20 +61,45 @@ class LoteAtualView(QWidget):
 
         self.card.setLayout(card_layout)
 
+        botoes_layout = QHBoxLayout()
+        botoes_layout.setSpacing(10)
+
+        self.botao_chegada = QPushButton("Cadastrar chegada")
+        self.botao_morte = QPushButton("Registrar morte")
+        self.botao_racao = QPushButton("Registrar ração")
+        self.botao_saida = QPushButton("Cadastrar saída")
+
+        self.botao_chegada.setObjectName("botaoSecundario")
+        self.botao_morte.setObjectName("botaoSecundario")
+        self.botao_racao.setObjectName("botaoSecundario")
+
+        botoes_layout.addWidget(self.botao_chegada)
+        botoes_layout.addWidget(self.botao_morte)
+        botoes_layout.addWidget(self.botao_racao)
+        botoes_layout.addWidget(self.botao_saida)
+
         self.botao_voltar = QPushButton("Voltar ao dashboard")
         self.botao_voltar.setObjectName("botaoSecundario")
-        self.botao_voltar.clicked.connect(self.voltar_dashboard)
 
         layout.addWidget(self.titulo)
         layout.addWidget(self.card)
+        layout.addLayout(botoes_layout)
         layout.addWidget(self.botao_voltar)
 
         self.setLayout(layout)
+
+        self.botao_chegada.clicked.connect(self.abrir_chegada)
+        self.botao_morte.clicked.connect(self.abrir_morte)
+        self.botao_racao.clicked.connect(self.abrir_racao)
+        self.botao_saida.clicked.connect(self.abrir_saida)
+        self.botao_voltar.clicked.connect(self.voltar_dashboard)
 
     def carregar_lote(self):
         lote = buscar_lote_ativo()
 
         if lote:
+            self.lote_id = lote[0]
+
             self.label_nome.setText(f"Nome: {lote[1]}")
             self.label_data.setText(f"Data de chegada: {lote[2]}")
             self.label_qtd_inicial.setText(f"Quantidade inicial: {lote[3]}")
@@ -81,11 +107,40 @@ class LoteAtualView(QWidget):
             self.label_peso.setText(f"Peso médio: {lote[5]} kg")
             self.label_status.setText(f"Status: {lote[6]}")
         else:
+            self.lote_id = None
             self.label_nome.setText("Nenhum lote ativo encontrado.")
+
+    def abrir_chegada(self):
+        from views.chegada_view import ChegadaView
+
+        if self.lote_id:
+            self.janela_chegada = ChegadaView(self.lote_id, self)
+            self.janela_chegada.show()
+
+    def abrir_morte(self):
+        from views.morte_view import MorteView
+
+        if self.lote_id:
+            self.janela_morte = MorteView(self.lote_id, self)
+            self.janela_morte.show()
+
+    def abrir_racao(self):
+        from views.racao_view import RacaoView
+
+        if self.lote_id:
+            self.janela_racao = RacaoView(self.lote_id, self)
+            self.janela_racao.show()
+
+    def abrir_saida(self):
+        from views.saida_view import SaidaView
+
+        if self.lote_id:
+            self.janela_saida = SaidaView(self.lote_id, self)
+            self.janela_saida.show()
 
     def voltar_dashboard(self):
         from views.dashboard_view import DashboardView
 
         self.dashboard = DashboardView(self.dados_usuario)
-        self.dashboard.show()
+        self.dashboard.showMaximized()
         self.close()

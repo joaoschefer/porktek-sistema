@@ -101,7 +101,7 @@ def cadastrar_morte(lote_id, data, quantidade, causa, observacao):
 
     try:
         cursor.execute("""
-            INSERT INTO (lote_id, data, quantidade, causa, observacao)
+            INSERT INTO mortes (lote_id, data, quantidade, causa, observacao)
             VALUES (?, ?, ?, ?, ?)
         """, (lote_id, data, quantidade, causa, observacao))
 
@@ -123,4 +123,51 @@ def cadastrar_morte(lote_id, data, quantidade, causa, observacao):
         conexao.close()
 
     
+def cadastrar_racao(lote_id, data, tipo, quantidade_kg, observacao):
+    conexao = conectar()
+    cursor = conexao.cursor()
 
+    try:
+        cursor.execute("""
+            INSERT INTO racoes (lote_id, data, tipo, quantidae_kg, observacao)
+            VALUES (?, ?, ?, ?, ?)
+        """, (lote_id, data, tipo, quantidade_kg, observacao))
+
+        conexao.commit()
+        return True, "Ração registrada com sucesso."
+    
+    except Exception as erro:
+        return False, f"Erro ao registrar ração: {erro}"
+    
+    finally:
+        conexao.close()
+
+
+def cadastrar_saida(lote_id, data, quantidade, peso_medio, observacao):
+    conexao = conectar()
+    cursor = conexao.cursor()
+
+    try:
+        cursor.execute("""
+            INSERT INTO saidas (lote_id, data, quantidade, peso_medio, observacao)
+            VALUES (?, ?, ?, ?, ?)
+        """, (lote_id, data, quantidade, peso_medio, observacao))
+
+        cursor.execute("""
+            UPDATE lotes
+            SET
+                quantidade_atual = quantidade_atual - ?,
+                peso_medio_atual = ?,
+                data_finalizacao = ?,
+                status = 'finalizado'
+            WHERE id = ?
+        """, (quantidade, peso_medio, data, lote_id))
+
+        conexao.commit()
+        return True, "Saída cadastrada e lote finalizado com sucesso."
+    
+    except Exception as erro:
+        return False, f"Erro ao cadastrar saida: {erro}"
+    
+    finally:
+        conexao.close()

@@ -64,7 +64,7 @@ class LoginView(QWidget):
             from views.dashboard_view import DashboardView
 
             self.dashboard = DashboardView(dados_usuario)
-            self.dashboard.show()
+            self.dashboard.showMaximized()
             self.close()
         else:
             QMessageBox.warning(self, "Erro", "Usuário ou senha inválidos.")
