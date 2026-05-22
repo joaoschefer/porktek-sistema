@@ -209,7 +209,7 @@ class DashboardView(QWidget):
             return
 
         self.lote_atual_view = LoteAtualView(self.dados_usuario)
-        self.lote_atual_view.show()
+        self.lote_atual_view.showMaximized()
         self.close()
 
     def carregar_lotes_finalizados(self):

@@ -12,8 +12,8 @@ class LoginView(QWidget):
         super().__init__()
 
         self.setWindowTitle("PorkTek - Login")
-        self.resize(LOGIN_WIDTH, LOGIN_HEIGHT)
-        self.setMinimumSize(LOGIN_WIDTH, LOGIN_HEIGHT)
+        self.resize(400, 400)
+        self.setMinimumSize(400, 400)
 
         self.titulo = QLabel("PorkTek")
         self.titulo.setObjectName("tituloLogin")

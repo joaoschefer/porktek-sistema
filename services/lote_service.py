@@ -108,7 +108,7 @@ def cadastrar_morte(lote_id, data, quantidade, causa, observacao):
         cursor.execute("""
             UPDATE lotes
             SET
-                mortalidade_total = mortalidade_total = ?,
+                mortalidade_total = mortalidade_total + ?,
                 quantidade_atual = quantidade_atual - ?
             WHERE id = ?
         """, (quantidade, quantidade, lote_id))
@@ -129,7 +129,7 @@ def cadastrar_racao(lote_id, data, tipo, quantidade_kg, observacao):
 
     try:
         cursor.execute("""
-            INSERT INTO racoes (lote_id, data, tipo, quantidae_kg, observacao)
+            INSERT INTO racoes (lote_id, data, tipo, quantidade_kg, observacao)
             VALUES (?, ?, ?, ?, ?)
         """, (lote_id, data, tipo, quantidade_kg, observacao))
 

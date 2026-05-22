@@ -13,8 +13,8 @@ class CreateLoteView(QWidget):
         self.dashboard = dashboard
 
         self.setWindowTitle("Criar novo lote")
-        self.resize(400, 220)
-        self.setMinimumSize(400, 220)
+        self.resize(500, 500)
+        self.setMinimumSize(500, 500)
 
         self.titulo = QLabel("Criar novo lote")
         self.titulo.setObjectName("tituloLogin")
