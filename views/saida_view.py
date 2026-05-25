@@ -15,8 +15,7 @@ class SaidaView(QWidget):
         self.tela_lote = tela_lote
 
         self.setWindowTitle("Cadastrar saída")
-        self.resize(500, 500)
-        self.setMinimumSize(500, 500)
+        self.setFixedSize(500, 500)
 
         self.titulo = QLabel("Cadastrar saída")
         self.titulo.setObjectName("tituloLogin")
@@ -66,7 +65,7 @@ class SaidaView(QWidget):
 
             if sucesso:
                 QMessageBox.information(self, "Sucesso", mensagem)
-                self.tela_lote.voltar_dashboard()
+                self.tela_lote.carregar_lote()
                 self.close()
             else:
                 QMessageBox.warning(self, "Erro", mensagem)

@@ -11,8 +11,7 @@ class ChegadaView(QWidget):
         self.tela_lote = tela_lote
 
         self.setWindowTitle("Cadastrar chegada")
-        self.resize(500, 500)
-        self.setMinimumSize(500, 500)
+        self.setFixedSize(500, 500)
 
         self.titulo = QLabel("Cadastrar chegada")
         self.titulo.setObjectName("tituloLogin")

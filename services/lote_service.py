@@ -158,16 +158,37 @@ def cadastrar_saida(lote_id, data, quantidade, peso_medio, observacao):
             SET
                 quantidade_atual = quantidade_atual - ?,
                 peso_medio_atual = ?,
-                data_finalizacao = ?,
-                status = 'finalizado'
             WHERE id = ?
-        """, (quantidade, peso_medio, data, lote_id))
+        """, (quantidade, peso_medio, lote_id))
 
         conexao.commit()
-        return True, "Saída cadastrada e lote finalizado com sucesso."
+        return True, "Saída cadastrada com sucesso."
     
     except Exception as erro:
         return False, f"Erro ao cadastrar saida: {erro}"
+    
+    finally:
+        conexao.close()
+
+
+def finalizar_lote(lote_id, data_finalizacao):
+    conexao = conectar()
+    cursor = conexao.cursor()
+
+    try:
+        cursor.execute("""
+            UPDATE lotes
+            SET
+                status = 'finalizado',
+                data_finalizacao = ?
+            WHERE id = ?
+        """, (data_finalizacao, lote_id))
+
+        conexao.commit()
+        return True, "Lote finalizado com sucesso."
+    
+    except Exception as erro:
+        return False, f"Erro ao finalizar lote: {erro}"
     
     finally:
         conexao.close()

@@ -15,8 +15,7 @@ class RacaoView(QWidget):
         self.tela_lote = tela_lote
 
         self.setWindowTitle("Registrar ração")
-        self.resize(500, 500)
-        self.setMinimumSize(500, 500)
+        self.setFixedSize(500, 500)
 
         self.titulo = QLabel("Registrar ração")
         self.titulo.setObjectName("tituloLogin")

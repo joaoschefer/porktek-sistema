@@ -15,8 +15,7 @@ class MorteView(QWidget):
         self.tela_lote = tela_lote
 
         self.setWindowTitle("Registrar morte")
-        self.resize(500, 500)
-        self.setMinimumSize(500, 500)
+        self.setFixedSize(500, 500)
 
         self.titulo = QLabel("Registrar morte")
         self.titulo.setObjectName("tituloLogin")
