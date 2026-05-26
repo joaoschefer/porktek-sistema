@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QMessageBox
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QIntValidator
 from datetime import date
 from services.lote_service import cadastrar_morte
 
@@ -22,12 +23,13 @@ class MorteView(QWidget):
         self.titulo.setAlignment(Qt.AlignCenter)
 
         self.input_data = QLineEdit()
-        self.input_quantidade = QLineEdit()
+        self.input_mossa = QLineEdit()
         self.input_causa = QLineEdit()
         self.input_observacao = QLineEdit()
 
         self.input_data.setText(date.today().strftime("%d/%m/%Y"))
-        self.input_quantidade.setPlaceholderText("Quantidade de mortes")
+        self.input_mossa.setValidator(QIntValidator(0, 999999, self))
+        self.input_mossa.setPlaceholderText("Número da mossa")
         self.input_causa.setPlaceholderText("Causa")
         self.input_observacao.setPlaceholderText("Observação")
 
@@ -41,7 +43,7 @@ class MorteView(QWidget):
 
         layout.addWidget(self.titulo)
         layout.addWidget(self.input_data)
-        layout.addWidget(self.input_quantidade)
+        layout.addWidget(self.input_mossa)
         layout.addWidget(self.input_causa)
         layout.addWidget(self.input_observacao)
         layout.addWidget(self.botao_salvar)
@@ -53,22 +55,24 @@ class MorteView(QWidget):
         self.botao_cancelar.clicked.connect(self.close)
 
     def salvar(self):
-        try:
-            data = self.input_data.text().strip()
-            quantidade = int(self.input_quantidade.text())
-            causa = self.input_causa.text().strip()
-            observacao = self.input_observacao.text().strip()
+        data = self.input_data.text().strip()
+        mossa = self.input_mossa.text().strip()
+        causa = self.input_causa.text().strip()
+        observacao = self.input_observacao.text().strip()
 
-            sucesso, mensagem = cadastrar_morte(
-                self.lote_id, data, quantidade, causa, observacao
-            )
+        if mossa == "":
+            QMessageBox.warning(self, "Atenção", "Informe o número da mossa.")
+            return
 
-            if sucesso:
-                QMessageBox.information(self, "Sucesso", mensagem)
-                self.tela_lote.carregar_lote()
-                self.close()
-            else:
-                QMessageBox.warning(self, "Erro", mensagem)
+        mossa = int(mossa)
 
-        except ValueError:
-            QMessageBox.warning(self, "Atenção", "Informe a quantidade corretamente.")
+        sucesso, mensagem = cadastrar_morte(
+            self.lote_id, data, mossa, causa, observacao
+        )
+
+        if sucesso:
+            QMessageBox.information(self, "Sucesso", mensagem)
+            self.tela_lote.carregar_lote()
+            self.close()
+        else:
+            QMessageBox.warning(self, "Erro", mensagem)

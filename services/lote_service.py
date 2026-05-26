@@ -1,4 +1,3 @@
-from datetime import date
 from database import conectar
 
 
@@ -29,8 +28,6 @@ def criar_lote(nome_lote):
         if lote_ativo:
             return False, "Já existe um lote ativo. Finalize o lote atual antes de criar outro."
 
-        data_atual = date.today().strftime("%d/%m/%Y")
-
         cursor.execute("""
             INSERT INTO lotes (
                 codigo,
@@ -46,7 +43,7 @@ def criar_lote(nome_lote):
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             nome_lote,
-            data_atual,
+            None,
             0,
             0,
             0,
@@ -75,52 +72,40 @@ def cadastrar_chegada(lote_id, data, quantidade, peso_medio, observacao):
             VALUES (?, ?, ?, ?, ?)
         """, (lote_id, data, quantidade, peso_medio, observacao))
 
-        cursor.execute("""
-            UPDATE lotes
-            SET
-                quantidade_inicial = quantidade_inicial + ?,
-                quantidade_atual = quantidade_atual + ?,
-                peso_medio_inicial = ?,
-                peso_medio_atual = ?
-            WHERE id = ?
-        """, (quantidade, quantidade, peso_medio, peso_medio, lote_id))
-
         conexao.commit()
-        return True, "Chegada cadastrada com sucesso."
-    
+
     except Exception as erro:
         return False, f"Erro ao cadastrar chegada: {erro}"
-    
+
     finally:
         conexao.close()
 
+    recalcular_peso_medio_lote(lote_id)
 
-def cadastrar_morte(lote_id, data, quantidade, causa, observacao):
+    return True, "Chegada cadastrada com sucesso."
+
+
+def cadastrar_morte(lote_id, data, mossa, causa, observacao):
     conexao = conectar()
     cursor = conexao.cursor()
 
     try:
         cursor.execute("""
-            INSERT INTO mortes (lote_id, data, quantidade, causa, observacao)
+            INSERT INTO mortes (lote_id, data, mossa, causa, observacao)
             VALUES (?, ?, ?, ?, ?)
-        """, (lote_id, data, quantidade, causa, observacao))
-
-        cursor.execute("""
-            UPDATE lotes
-            SET
-                mortalidade_total = mortalidade_total + ?,
-                quantidade_atual = quantidade_atual - ?
-            WHERE id = ?
-        """, (quantidade, quantidade, lote_id))
+        """, (lote_id, data, mossa, causa, observacao))
 
         conexao.commit()
-        return True, "Morte registrada com sucesso."
-    
+
     except Exception as erro:
         return False, f"Erro ao registrar morte: {erro}"
-    
+
     finally:
         conexao.close()
+
+    recalcular_peso_medio_lote(lote_id)
+
+    return True, "Morte registrada com sucesso."
 
     
 def cadastrar_racao(lote_id, data, tipo, quantidade_kg, observacao):
@@ -153,22 +138,17 @@ def cadastrar_saida(lote_id, data, quantidade, peso_medio, observacao):
             VALUES (?, ?, ?, ?, ?)
         """, (lote_id, data, quantidade, peso_medio, observacao))
 
-        cursor.execute("""
-            UPDATE lotes
-            SET
-                quantidade_atual = quantidade_atual - ?,
-                peso_medio_atual = ?,
-            WHERE id = ?
-        """, (quantidade, peso_medio, lote_id))
-
         conexao.commit()
-        return True, "Saída cadastrada com sucesso."
-    
+
     except Exception as erro:
-        return False, f"Erro ao cadastrar saida: {erro}"
-    
+        return False, f"Erro ao cadastrar saída: {erro}"
+
     finally:
         conexao.close()
+
+    recalcular_peso_medio_lote(lote_id)
+
+    return True, "Saída cadastrada com sucesso."
 
 
 def finalizar_lote(lote_id, data_finalizacao):
@@ -190,5 +170,85 @@ def finalizar_lote(lote_id, data_finalizacao):
     except Exception as erro:
         return False, f"Erro ao finalizar lote: {erro}"
     
+    finally:
+        conexao.close()
+
+
+def recalcular_peso_medio_lote(lote_id):
+    conexao = conectar()
+    cursor = conexao.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT quantidade, peso_medio
+            FROM chegadas
+            WHERE lote_id = ?
+            ORDER BY id
+        """, (lote_id,))
+        chegadas = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT data
+            FROM chegadas
+            WHERE lote_id = ?
+            ORDER BY id
+            LIMIT 1
+        """, (lote_id,))
+        primeira_chegada = cursor.fetchone()
+        data_chegada = primeira_chegada[0] if primeira_chegada else None
+
+        cursor.execute("""
+            SELECT quantidade
+            FROM saidas
+            WHERE lote_id = ?
+        """, (lote_id,))
+        saidas = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM mortes
+            WHERE lote_id = ?
+        """, (lote_id,))
+        total_mortes = cursor.fetchone()[0]
+
+        peso_total_chegadas = 0
+        quantidade_total_chegadas = 0
+
+        for quantidade, peso_medio in chegadas:
+            peso_total_chegadas += quantidade * peso_medio
+            quantidade_total_chegadas += quantidade
+
+        quantidade_total_saidas = 0
+
+        for (quantidade,) in saidas:
+            quantidade_total_saidas += quantidade
+
+        quantidade_atual = quantidade_total_chegadas - quantidade_total_saidas - total_mortes
+
+        if quantidade_total_chegadas > 0:
+            peso_medio_atual = peso_total_chegadas / quantidade_total_chegadas
+        else:
+            peso_medio_atual = 0
+
+        cursor.execute("""
+            UPDATE lotes
+            SET 
+                data_chegada = ?,
+                quantidade_inicial = ?,
+                quantidade_atual = ?,
+                mortalidade_total = ?,
+                peso_medio_atual = ?
+            WHERE id = ?
+        """, (
+            data_chegada,
+            quantidade_total_chegadas,
+            quantidade_atual,
+            total_mortes,
+            round(peso_medio_atual, 2),
+            lote_id
+        ))
+
+        conexao.commit()
+
     finally:
         conexao.close()

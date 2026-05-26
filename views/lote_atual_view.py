@@ -1,8 +1,11 @@
 from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QPushButton, QFrame, QMessageBox
+    QPushButton, QFrame, QMessageBox, QTabWidget,
+    QTableWidget, QTableWidgetItem, QHeaderView
 )
+from PySide6.QtCore import Qt
 from services.lote_service import buscar_lote_ativo, finalizar_lote
+from database import conectar
 from config.window_config import (
     DEFAULT_WIDTH,
     DEFAULT_HEIGHT,
@@ -77,7 +80,7 @@ class LoteAtualView(QWidget):
         area_central = QHBoxLayout()
         area_central.setSpacing(18)
 
-        # Painel de informações
+        # Painel informações
         painel_info = QFrame()
         painel_info.setObjectName("painelDashboard")
 
@@ -106,7 +109,7 @@ class LoteAtualView(QWidget):
 
         painel_info.setLayout(info_layout)
 
-        # Painel de ações
+        # Painel ações
         painel_acoes = QFrame()
         painel_acoes.setObjectName("painelDashboard")
 
@@ -152,27 +155,47 @@ class LoteAtualView(QWidget):
         area_central.addWidget(painel_info, 2)
         area_central.addWidget(painel_acoes, 1)
 
-        layout_principal.addLayout(area_central, 1)
+        layout_principal.addLayout(area_central)
 
-        # Área inferior
-        painel_resumo = QFrame()
-        painel_resumo.setObjectName("painelDashboard")
+        # Histórico do lote
+        painel_historico = QFrame()
+        painel_historico.setObjectName("painelDashboard")
 
-        resumo_layout = QVBoxLayout()
-        resumo_layout.setSpacing(10)
+        historico_layout = QVBoxLayout()
+        historico_layout.setSpacing(12)
 
-        titulo_resumo = QLabel("Resumo do lote")
-        titulo_resumo.setObjectName("secaoDashboard")
+        titulo_historico = QLabel("Histórico do lote")
+        titulo_historico.setObjectName("secaoDashboard")
 
-        self.label_resumo = QLabel("Aqui depois podemos mostrar histórico de mortes, rações, chegadas e saídas.")
-        self.label_resumo.setObjectName("textoInfoDashboard")
+        self.abas_historico = QTabWidget()
 
-        resumo_layout.addWidget(titulo_resumo)
-        resumo_layout.addWidget(self.label_resumo)
+        self.tabela_chegadas = self.criar_tabela([
+            "Data", "Quantidade", "Peso médio", "Observação"
+        ])
 
-        painel_resumo.setLayout(resumo_layout)
+        self.tabela_mortes = self.criar_tabela([
+            "Data", "Mossa", "Causa", "Observação"
+        ])
 
-        layout_principal.addWidget(painel_resumo)
+        self.tabela_racoes = self.criar_tabela([
+            "Data", "Tipo", "Quantidade kg", "Observação"
+        ])
+
+        self.tabela_saidas = self.criar_tabela([
+            "Data", "Quantidade", "Peso médio", "Observação"
+        ])
+
+        self.abas_historico.addTab(self.tabela_chegadas, "Chegadas")
+        self.abas_historico.addTab(self.tabela_mortes, "Mortes")
+        self.abas_historico.addTab(self.tabela_racoes, "Rações")
+        self.abas_historico.addTab(self.tabela_saidas, "Saídas")
+
+        historico_layout.addWidget(titulo_historico)
+        historico_layout.addWidget(self.abas_historico)
+
+        painel_historico.setLayout(historico_layout)
+
+        layout_principal.addWidget(painel_historico, 1)
 
         self.setLayout(layout_principal)
 
@@ -208,6 +231,19 @@ class LoteAtualView(QWidget):
             "valor": label_valor
         }
 
+    def criar_tabela(self, colunas):
+        tabela = QTableWidget()
+        tabela.setObjectName("tabelaDashboard")
+        tabela.setColumnCount(len(colunas))
+        tabela.setHorizontalHeaderLabels(colunas)
+
+        tabela.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        tabela.verticalHeader().setVisible(False)
+        tabela.setEditTriggers(QTableWidget.NoEditTriggers)
+        tabela.setSelectionBehavior(QTableWidget.SelectRows)
+
+        return tabela
+
     def carregar_lote(self):
         lote = buscar_lote_ativo()
 
@@ -227,13 +263,12 @@ class LoteAtualView(QWidget):
             self.card_peso["valor"].setText(f"{peso_medio} kg")
 
             self.label_codigo.setText(f"Código: {nome}")
-            self.label_data.setText(f"Data de chegada: {data_chegada}")
+            data_chegada_texto = data_chegada if data_chegada else "Aguardando primeira chegada"
+            self.label_data.setText(f"Data de chegada: {data_chegada_texto}")
             self.label_status.setText(f"Status: {status}")
             self.label_peso.setText(f"Peso médio atual: {peso_medio} kg")
 
-            self.label_resumo.setText(
-                f"O lote {nome} possui {qtd_atual} suínos atualmente."
-            )
+            self.carregar_historico()
 
         else:
             self.lote_id = None
@@ -247,7 +282,69 @@ class LoteAtualView(QWidget):
             self.label_data.setText("Data de chegada: -")
             self.label_status.setText("Status: -")
             self.label_peso.setText("Peso médio atual: -")
-            self.label_resumo.setText("Nenhum lote ativo encontrado.")
+
+            self.limpar_historico()
+
+    def carregar_historico(self):
+        if not self.lote_id:
+            return
+
+        conexao = conectar()
+        cursor = conexao.cursor()
+
+        cursor.execute("""
+            SELECT data, quantidade, peso_medio, observacao
+            FROM chegadas
+            WHERE lote_id = ?
+            ORDER BY id DESC
+        """, (self.lote_id,))
+        chegadas = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT data, mossa, causa, observacao
+            FROM mortes
+            WHERE lote_id = ?
+            ORDER BY id DESC
+        """, (self.lote_id,))
+        mortes = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT data, tipo, quantidade_kg, observacao
+            FROM racoes
+            WHERE lote_id = ?
+            ORDER BY id DESC
+        """, (self.lote_id,))
+        racoes = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT data, quantidade, peso_medio, observacao
+            FROM saidas
+            WHERE lote_id = ?
+            ORDER BY id DESC
+        """, (self.lote_id,))
+        saidas = cursor.fetchall()
+
+        conexao.close()
+
+        self.preencher_tabela(self.tabela_chegadas, chegadas)
+        self.preencher_tabela(self.tabela_mortes, mortes)
+        self.preencher_tabela(self.tabela_racoes, racoes)
+        self.preencher_tabela(self.tabela_saidas, saidas)
+
+    def preencher_tabela(self, tabela, dados):
+        tabela.setRowCount(len(dados))
+
+        for linha, registro in enumerate(dados):
+            for coluna, valor in enumerate(registro):
+                item = QTableWidgetItem(str(valor if valor is not None else ""))
+                item.setTextAlignment(Qt.AlignCenter)
+                tabela.setItem(linha, coluna, item)
+
+    def limpar_historico(self):
+        self.tabela_chegadas.setRowCount(0)
+        self.tabela_mortes.setRowCount(0)
+        self.tabela_racoes.setRowCount(0)
+        self.tabela_saidas.setRowCount(0)
 
     def abrir_chegada(self):
         from views.chegada_view import ChegadaView

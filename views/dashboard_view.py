@@ -177,7 +177,9 @@ class DashboardView(QWidget):
             qtd_atual = lote[3]
             peso_medio = lote[4] if lote[4] is not None else 0
 
-            texto = f"Lote iniciado em {data_chegada}"
+            texto = "Aguardando primeira chegada"
+            if data_chegada:
+                texto = f"Lote iniciado em {data_chegada}"
 
             self.lote_ativo_label.setText(texto)
             self.card_codigo["valor"].setText(str(codigo))
@@ -229,7 +231,7 @@ class DashboardView(QWidget):
 
         for linha, lote in enumerate(lotes):
             for coluna, valor in enumerate(lote):
-                item = QTableWidgetItem(str(valor))
+                item = QTableWidgetItem(str(valor if valor is not None else ""))
                 item.setTextAlignment(Qt.AlignCenter)
                 self.tabela_lotes.setItem(linha, coluna, item)
 
