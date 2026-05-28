@@ -1,9 +1,10 @@
 from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton,
-    QTableWidget, QTableWidgetItem, QFrame, QHeaderView
+    QTableWidget, QTableWidgetItem, QFrame, QHeaderView,
+    QGridLayout, QScrollArea
 )
 from PySide6.QtCore import Qt
-from database import conectar
+from services.lote_service import buscar_lote_dashboard, buscar_lotes_finalizados
 from config.window_config import (
     DEFAULT_WIDTH,
     DEFAULT_HEIGHT,
@@ -27,11 +28,21 @@ class DashboardView(QWidget):
         self.botao_sair.clicked.connect(self.sair)
         self.botao_criar_lote.clicked.connect(self.abrir_criar_lote)
         self.botao_acessar_lote.clicked.connect(self.abrir_lote_ativo)
+        self.botao_ver_finalizado.clicked.connect(self.abrir_lote_finalizado)
+        self.tabela_lotes.cellDoubleClicked.connect(self.abrir_lote_finalizado)
 
         self.carregar_lote_ativo()
         self.carregar_lotes_finalizados()
 
     def montar_interface(self):
+        layout_raiz = QVBoxLayout()
+        layout_raiz.setContentsMargins(0, 0, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+
+        conteudo = QWidget()
         layout_principal = QVBoxLayout()
         layout_principal.setContentsMargins(30, 25, 30, 25)
         layout_principal.setSpacing(20)
@@ -75,7 +86,7 @@ class DashboardView(QWidget):
         painel_layout.addWidget(titulo_lote)
         painel_layout.addWidget(self.lote_ativo_label)
 
-        cards_layout = QHBoxLayout()
+        cards_layout = QGridLayout()
         cards_layout.setSpacing(12)
 
         self.card_codigo = self.criar_card("Código", "-")
@@ -83,10 +94,12 @@ class DashboardView(QWidget):
         self.card_qtd_atual = self.criar_card("Qtd. atual", "-")
         self.card_peso = self.criar_card("Peso médio", "-")
 
-        cards_layout.addWidget(self.card_codigo["frame"])
-        cards_layout.addWidget(self.card_qtd_inicial["frame"])
-        cards_layout.addWidget(self.card_qtd_atual["frame"])
-        cards_layout.addWidget(self.card_peso["frame"])
+        cards_layout.addWidget(self.card_codigo["frame"], 0, 0)
+        cards_layout.addWidget(self.card_qtd_inicial["frame"], 0, 1)
+        cards_layout.addWidget(self.card_qtd_atual["frame"], 1, 0)
+        cards_layout.addWidget(self.card_peso["frame"], 1, 1)
+        cards_layout.setColumnStretch(0, 1)
+        cards_layout.setColumnStretch(1, 1)
 
         painel_layout.addLayout(cards_layout)
 
@@ -112,10 +125,21 @@ class DashboardView(QWidget):
         titulo_finalizados.setObjectName("secaoDashboard")
         layout_principal.addWidget(titulo_finalizados)
 
+        finalizados_acoes_layout = QHBoxLayout()
+        finalizados_acoes_layout.addStretch()
+
+        self.botao_ver_finalizado = QPushButton("Ver lote finalizado")
+        self.botao_ver_finalizado.setObjectName("botaoSecundario")
+        self.botao_ver_finalizado.setMinimumHeight(38)
+
+        finalizados_acoes_layout.addWidget(self.botao_ver_finalizado)
+        layout_principal.addLayout(finalizados_acoes_layout)
+
         self.tabela_lotes = QTableWidget()
         self.tabela_lotes.setObjectName("tabelaDashboard")
-        self.tabela_lotes.setColumnCount(6)
+        self.tabela_lotes.setColumnCount(7)
         self.tabela_lotes.setHorizontalHeaderLabels([
+            "ID",
             "Código",
             "Data chegada",
             "Data finalização",
@@ -123,6 +147,7 @@ class DashboardView(QWidget):
             "Qtd atual",
             "Status"
         ])
+        self.tabela_lotes.hideColumn(0)
 
         self.tabela_lotes.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tabela_lotes.verticalHeader().setVisible(False)
@@ -131,7 +156,11 @@ class DashboardView(QWidget):
 
         layout_principal.addWidget(self.tabela_lotes)
 
-        self.setLayout(layout_principal)
+        conteudo.setLayout(layout_principal)
+        scroll.setWidget(conteudo)
+        layout_raiz.addWidget(scroll)
+
+        self.setLayout(layout_raiz)
 
     def criar_card(self, titulo, valor):
         frame = QFrame()
@@ -157,18 +186,7 @@ class DashboardView(QWidget):
         }
 
     def carregar_lote_ativo(self):
-        conexao = conectar()
-        cursor = conexao.cursor()
-
-        cursor.execute("""
-            SELECT codigo, data_chegada, quantidade_inicial, quantidade_atual, peso_medio_atual
-            FROM lotes
-            WHERE status = 'ativo'
-            LIMIT 1
-        """)
-
-        lote = cursor.fetchone()
-        conexao.close()
+        lote = buscar_lote_dashboard()
 
         if lote:
             codigo = lote[0]
@@ -214,18 +232,30 @@ class DashboardView(QWidget):
         self.lote_atual_view.showMaximized()
         self.close()
 
+    def abrir_lote_finalizado(self, *_):
+        from views.lote_atual_view import LoteAtualView
+        from PySide6.QtWidgets import QMessageBox
+
+        linha = self.tabela_lotes.currentRow()
+        if _:
+            linha = _[0]
+
+        if linha < 0:
+            QMessageBox.warning(self, "Atenção", "Selecione um lote finalizado.")
+            return
+
+        lote_id = int(self.tabela_lotes.item(linha, 0).text())
+
+        self.lote_detalhe_view = LoteAtualView(
+            self.dados_usuario,
+            lote_id=lote_id,
+            somente_leitura=True
+        )
+        self.lote_detalhe_view.showMaximized()
+        self.close()
+
     def carregar_lotes_finalizados(self):
-        conexao = conectar()
-        cursor = conexao.cursor()
-
-        cursor.execute("""
-            SELECT codigo, data_chegada, data_finalizacao, quantidade_inicial, quantidade_atual, status
-            FROM lotes
-            WHERE status = 'finalizado'
-        """)
-
-        lotes = cursor.fetchall()
-        conexao.close()
+        lotes = buscar_lotes_finalizados()
 
         self.tabela_lotes.setRowCount(len(lotes))
 

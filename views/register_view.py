@@ -2,6 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QMessageBox
 )
+from PySide6.QtCore import Qt
 from services.auth_service import cadastrar_usuario
 
 
@@ -10,7 +11,8 @@ class RegisterView(QWidget):
         super().__init__()
 
         self.setWindowTitle("Sistema de Suínos - Cadastro")
-        self.setFixedSize(400, 400)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
+        self.setFixedSize(420, 440)
 
         self.titulo = QLabel("Cadastro de Usuário")
 

@@ -4,20 +4,22 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from datetime import date
-from services.lote_service import cadastrar_racao
+from services.lote_service import cadastrar_racao, atualizar_racao
 
 
 class RacaoView(QWidget):
-    def __init__(self, lote_id, tela_lote):
+    def __init__(self, lote_id, tela_lote, registro=None):
         super().__init__()
 
         self.lote_id = lote_id
         self.tela_lote = tela_lote
+        self.registro = registro
 
-        self.setWindowTitle("Registrar ração")
+        self.setWindowTitle("Editar ração" if self.registro else "Registrar ração")
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
         self.setFixedSize(500, 500)
 
-        self.titulo = QLabel("Registrar ração")
+        self.titulo = QLabel("Editar ração" if self.registro else "Registrar ração")
         self.titulo.setObjectName("tituloLogin")
         self.titulo.setAlignment(Qt.AlignCenter)
 
@@ -52,6 +54,13 @@ class RacaoView(QWidget):
         self.botao_salvar.clicked.connect(self.salvar)
         self.botao_cancelar.clicked.connect(self.close)
 
+        if self.registro:
+            _, data, tipo, quantidade, observacao = self.registro
+            self.input_data.setText(str(data))
+            self.input_tipo.setText(str(tipo or ""))
+            self.input_quantidade.setText(str(quantidade))
+            self.input_observacao.setText(str(observacao or ""))
+
     def salvar(self):
         try:
             data = self.input_data.text().strip()
@@ -59,9 +68,14 @@ class RacaoView(QWidget):
             quantidade_kg = float(self.input_quantidade.text().replace(",", "."))
             observacao = self.input_observacao.text().strip()
 
-            sucesso, mensagem = cadastrar_racao(
-                self.lote_id, data, tipo, quantidade_kg, observacao
-            )
+            if self.registro:
+                sucesso, mensagem = atualizar_racao(
+                    self.registro[0], self.lote_id, data, tipo, quantidade_kg, observacao
+                )
+            else:
+                sucesso, mensagem = cadastrar_racao(
+                    self.lote_id, data, tipo, quantidade_kg, observacao
+                )
 
             if sucesso:
                 QMessageBox.information(self, "Sucesso", mensagem)

@@ -124,12 +124,37 @@ QPushButton#botaoSair:hover {
 
 QTableWidget#tabelaDashboard {
     background-color: #1e293b;
+    alternate-background-color: #162033;
     color: #f8fafc;
     border: 1px solid #334155;
     border-radius: 12px;
     gridline-color: #334155;
     selection-background-color: #2563eb;
     selection-color: white;
+}
+
+QTableWidget#tabelaDashboard::item {
+    padding: 8px;
+}
+
+QTabWidget::pane {
+    border: 1px solid #334155;
+    border-radius: 10px;
+    background-color: #111827;
+}
+
+QTabBar::tab {
+    background-color: #1e293b;
+    color: #cbd5e1;
+    padding: 10px 18px;
+    border: 1px solid #334155;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+QTabBar::tab:selected {
+    background-color: #2563eb;
+    color: #ffffff;
 }
 
 QHeaderView::section {

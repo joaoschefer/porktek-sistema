@@ -1,4 +1,19 @@
+from datetime import datetime
 from database import conectar
+
+
+def validar_data(data):
+    try:
+        datetime.strptime(data, "%d/%m/%Y")
+        return True
+    except ValueError:
+        return False
+
+
+def validar_numero_positivo(valor, nome):
+    if valor <= 0:
+        return False, f"{nome} deve ser maior que zero."
+    return True, ""
 
 
 def buscar_lote_ativo():
@@ -16,6 +31,58 @@ def buscar_lote_ativo():
     conexao.close()
 
     return lote
+
+
+def buscar_lote_por_id(lote_id):
+    conexao = conectar()
+    cursor = conexao.cursor()
+
+    cursor.execute("""
+        SELECT id, codigo, data_chegada, quantidade_inicial, quantidade_atual,
+               peso_medio_atual, status, data_finalizacao
+        FROM lotes
+        WHERE id = ?
+        LIMIT 1
+    """, (lote_id,))
+
+    lote = cursor.fetchone()
+    conexao.close()
+
+    return lote
+
+
+def buscar_lote_dashboard():
+    conexao = conectar()
+    cursor = conexao.cursor()
+
+    cursor.execute("""
+        SELECT codigo, data_chegada, quantidade_inicial, quantidade_atual, peso_medio_atual
+        FROM lotes
+        WHERE status = 'ativo'
+        LIMIT 1
+    """)
+
+    lote = cursor.fetchone()
+    conexao.close()
+
+    return lote
+
+
+def buscar_lotes_finalizados():
+    conexao = conectar()
+    cursor = conexao.cursor()
+
+    cursor.execute("""
+        SELECT id, codigo, data_chegada, data_finalizacao, quantidade_inicial, quantidade_atual, status
+        FROM lotes
+        WHERE status = 'finalizado'
+        ORDER BY id DESC
+    """)
+
+    lotes = cursor.fetchall()
+    conexao.close()
+
+    return lotes
 
 
 def criar_lote(nome_lote):
@@ -62,7 +129,77 @@ def criar_lote(nome_lote):
     finally:
         conexao.close()
 
+
+def buscar_quantidade_disponivel_saida(cursor, lote_id, saida_id=None):
+    cursor.execute("""
+        SELECT COALESCE(SUM(quantidade), 0)
+        FROM chegadas
+        WHERE lote_id = ?
+    """, (lote_id,))
+    total_chegadas = cursor.fetchone()[0]
+
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM mortes
+        WHERE lote_id = ?
+    """, (lote_id,))
+    total_mortes = cursor.fetchone()[0]
+
+    if saida_id:
+        cursor.execute("""
+            SELECT COALESCE(SUM(quantidade), 0)
+            FROM saidas
+            WHERE lote_id = ? AND id <> ?
+        """, (lote_id, saida_id))
+    else:
+        cursor.execute("""
+            SELECT COALESCE(SUM(quantidade), 0)
+            FROM saidas
+            WHERE lote_id = ?
+        """, (lote_id,))
+
+    total_saidas = cursor.fetchone()[0]
+    return total_chegadas - total_mortes - total_saidas
+
+
+def buscar_animais_comprometidos(cursor, lote_id):
+    cursor.execute("""
+        SELECT COALESCE(SUM(quantidade), 0)
+        FROM saidas
+        WHERE lote_id = ?
+    """, (lote_id,))
+    total_saidas = cursor.fetchone()[0]
+
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM mortes
+        WHERE lote_id = ?
+    """, (lote_id,))
+    total_mortes = cursor.fetchone()[0]
+
+    return total_saidas + total_mortes
+
+
+def validar_chegada(data, quantidade, peso_medio):
+    if not validar_data(data):
+        return False, "Informe a data no formato dd/mm/aaaa."
+
+    valido, mensagem = validar_numero_positivo(quantidade, "Quantidade")
+    if not valido:
+        return False, mensagem
+
+    valido, mensagem = validar_numero_positivo(peso_medio, "Peso médio")
+    if not valido:
+        return False, mensagem
+
+    return True, ""
+
+
 def cadastrar_chegada(lote_id, data, quantidade, peso_medio, observacao):
+    valido, mensagem = validar_chegada(data, quantidade, peso_medio)
+    if not valido:
+        return False, mensagem
+
     conexao = conectar()
     cursor = conexao.cursor()
 
@@ -85,11 +222,78 @@ def cadastrar_chegada(lote_id, data, quantidade, peso_medio, observacao):
     return True, "Chegada cadastrada com sucesso."
 
 
-def cadastrar_morte(lote_id, data, mossa, causa, observacao):
+def atualizar_chegada(registro_id, lote_id, data, quantidade, peso_medio, observacao):
+    valido, mensagem = validar_chegada(data, quantidade, peso_medio)
+    if not valido:
+        return False, mensagem
+
     conexao = conectar()
     cursor = conexao.cursor()
 
     try:
+        cursor.execute("""
+            SELECT COALESCE(SUM(quantidade), 0)
+            FROM chegadas
+            WHERE lote_id = ? AND id <> ?
+        """, (lote_id, registro_id))
+        outras_chegadas = cursor.fetchone()[0]
+        animais_comprometidos = buscar_animais_comprometidos(cursor, lote_id)
+
+        if outras_chegadas + quantidade < animais_comprometidos:
+            return False, f"Quantidade menor que saídas e mortes já registradas ({animais_comprometidos})."
+
+        cursor.execute("""
+            UPDATE chegadas
+            SET data = ?, quantidade = ?, peso_medio = ?, observacao = ?
+            WHERE id = ? AND lote_id = ?
+        """, (data, quantidade, peso_medio, observacao, registro_id, lote_id))
+
+        if cursor.rowcount == 0:
+            return False, "Chegada não encontrada."
+
+        conexao.commit()
+
+    except Exception as erro:
+        return False, f"Erro ao atualizar chegada: {erro}"
+
+    finally:
+        conexao.close()
+
+    recalcular_peso_medio_lote(lote_id)
+
+    return True, "Chegada atualizada com sucesso."
+
+
+def validar_morte(data, mossa):
+    if not validar_data(data):
+        return False, "Informe a data no formato dd/mm/aaaa."
+
+    valido, mensagem = validar_numero_positivo(mossa, "Mossa")
+    if not valido:
+        return False, mensagem
+
+    return True, ""
+
+
+def cadastrar_morte(lote_id, data, mossa, causa, observacao):
+    valido, mensagem = validar_morte(data, mossa)
+    if not valido:
+        return False, mensagem
+
+    conexao = conectar()
+    cursor = conexao.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT quantidade_atual
+            FROM lotes
+            WHERE id = ?
+        """, (lote_id,))
+        lote = cursor.fetchone()
+
+        if not lote or lote[0] <= 0:
+            return False, "Não há suínos disponíveis para registrar morte."
+
         cursor.execute("""
             INSERT INTO mortes (lote_id, data, mossa, causa, observacao)
             VALUES (?, ?, ?, ?, ?)
@@ -107,8 +311,57 @@ def cadastrar_morte(lote_id, data, mossa, causa, observacao):
 
     return True, "Morte registrada com sucesso."
 
-    
+
+def atualizar_morte(registro_id, lote_id, data, mossa, causa, observacao):
+    valido, mensagem = validar_morte(data, mossa)
+    if not valido:
+        return False, mensagem
+
+    conexao = conectar()
+    cursor = conexao.cursor()
+
+    try:
+        cursor.execute("""
+            UPDATE mortes
+            SET data = ?, mossa = ?, causa = ?, observacao = ?
+            WHERE id = ? AND lote_id = ?
+        """, (data, mossa, causa, observacao, registro_id, lote_id))
+
+        if cursor.rowcount == 0:
+            return False, "Morte não encontrada."
+
+        conexao.commit()
+
+    except Exception as erro:
+        return False, f"Erro ao atualizar morte: {erro}"
+
+    finally:
+        conexao.close()
+
+    recalcular_peso_medio_lote(lote_id)
+
+    return True, "Morte atualizada com sucesso."
+
+
+def validar_racao(data, tipo, quantidade_kg):
+    if not validar_data(data):
+        return False, "Informe a data no formato dd/mm/aaaa."
+
+    if tipo.strip() == "":
+        return False, "Informe o tipo de ração."
+
+    valido, mensagem = validar_numero_positivo(quantidade_kg, "Quantidade")
+    if not valido:
+        return False, mensagem
+
+    return True, ""
+
+
 def cadastrar_racao(lote_id, data, tipo, quantidade_kg, observacao):
+    valido, mensagem = validar_racao(data, tipo, quantidade_kg)
+    if not valido:
+        return False, mensagem
+
     conexao = conectar()
     cursor = conexao.cursor()
 
@@ -120,19 +373,71 @@ def cadastrar_racao(lote_id, data, tipo, quantidade_kg, observacao):
 
         conexao.commit()
         return True, "Ração registrada com sucesso."
-    
+
     except Exception as erro:
         return False, f"Erro ao registrar ração: {erro}"
-    
+
     finally:
         conexao.close()
 
 
-def cadastrar_saida(lote_id, data, quantidade, peso_medio, observacao):
+def atualizar_racao(registro_id, lote_id, data, tipo, quantidade_kg, observacao):
+    valido, mensagem = validar_racao(data, tipo, quantidade_kg)
+    if not valido:
+        return False, mensagem
+
     conexao = conectar()
     cursor = conexao.cursor()
 
     try:
+        cursor.execute("""
+            UPDATE racoes
+            SET data = ?, tipo = ?, quantidade_kg = ?, observacao = ?
+            WHERE id = ? AND lote_id = ?
+        """, (data, tipo, quantidade_kg, observacao, registro_id, lote_id))
+
+        if cursor.rowcount == 0:
+            return False, "Ração não encontrada."
+
+        conexao.commit()
+        return True, "Ração atualizada com sucesso."
+
+    except Exception as erro:
+        return False, f"Erro ao atualizar ração: {erro}"
+
+    finally:
+        conexao.close()
+
+
+def validar_saida(data, quantidade, peso_medio):
+    if not validar_data(data):
+        return False, "Informe a data no formato dd/mm/aaaa."
+
+    valido, mensagem = validar_numero_positivo(quantidade, "Quantidade")
+    if not valido:
+        return False, mensagem
+
+    valido, mensagem = validar_numero_positivo(peso_medio, "Peso médio")
+    if not valido:
+        return False, mensagem
+
+    return True, ""
+
+
+def cadastrar_saida(lote_id, data, quantidade, peso_medio, observacao):
+    valido, mensagem = validar_saida(data, quantidade, peso_medio)
+    if not valido:
+        return False, mensagem
+
+    conexao = conectar()
+    cursor = conexao.cursor()
+
+    try:
+        quantidade_disponivel = buscar_quantidade_disponivel_saida(cursor, lote_id)
+
+        if quantidade > quantidade_disponivel:
+            return False, f"Quantidade de saída maior que disponível ({quantidade_disponivel})."
+
         cursor.execute("""
             INSERT INTO saidas (lote_id, data, quantidade, peso_medio, observacao)
             VALUES (?, ?, ?, ?, ?)
@@ -151,6 +456,42 @@ def cadastrar_saida(lote_id, data, quantidade, peso_medio, observacao):
     return True, "Saída cadastrada com sucesso."
 
 
+def atualizar_saida(registro_id, lote_id, data, quantidade, peso_medio, observacao):
+    valido, mensagem = validar_saida(data, quantidade, peso_medio)
+    if not valido:
+        return False, mensagem
+
+    conexao = conectar()
+    cursor = conexao.cursor()
+
+    try:
+        quantidade_disponivel = buscar_quantidade_disponivel_saida(cursor, lote_id, registro_id)
+
+        if quantidade > quantidade_disponivel:
+            return False, f"Quantidade de saída maior que disponível ({quantidade_disponivel})."
+
+        cursor.execute("""
+            UPDATE saidas
+            SET data = ?, quantidade = ?, peso_medio = ?, observacao = ?
+            WHERE id = ? AND lote_id = ?
+        """, (data, quantidade, peso_medio, observacao, registro_id, lote_id))
+
+        if cursor.rowcount == 0:
+            return False, "Saída não encontrada."
+
+        conexao.commit()
+
+    except Exception as erro:
+        return False, f"Erro ao atualizar saída: {erro}"
+
+    finally:
+        conexao.close()
+
+    recalcular_peso_medio_lote(lote_id)
+
+    return True, "Saída atualizada com sucesso."
+
+
 def finalizar_lote(lote_id, data_finalizacao):
     conexao = conectar()
     cursor = conexao.cursor()
@@ -166,12 +507,176 @@ def finalizar_lote(lote_id, data_finalizacao):
 
         conexao.commit()
         return True, "Lote finalizado com sucesso."
-    
+
     except Exception as erro:
         return False, f"Erro ao finalizar lote: {erro}"
-    
+
     finally:
         conexao.close()
+
+
+def buscar_historico_lote(lote_id):
+    conexao = conectar()
+    cursor = conexao.cursor()
+
+    cursor.execute("""
+        SELECT id, data, quantidade, peso_medio, observacao
+        FROM chegadas
+        WHERE lote_id = ?
+        ORDER BY id DESC
+    """, (lote_id,))
+    chegadas = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT id, data, mossa, causa, observacao
+        FROM mortes
+        WHERE lote_id = ?
+        ORDER BY id DESC
+    """, (lote_id,))
+    mortes = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT id, data, tipo, quantidade_kg, observacao
+        FROM racoes
+        WHERE lote_id = ?
+        ORDER BY id DESC
+    """, (lote_id,))
+    racoes = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT id, data, quantidade, peso_medio, observacao
+        FROM saidas
+        WHERE lote_id = ?
+        ORDER BY id DESC
+    """, (lote_id,))
+    saidas = cursor.fetchall()
+
+    conexao.close()
+
+    return {
+        "chegadas": chegadas,
+        "mortes": mortes,
+        "racoes": racoes,
+        "saidas": saidas
+    }
+
+
+def buscar_resumo_lote(lote_id):
+    conexao = conectar()
+    cursor = conexao.cursor()
+
+    cursor.execute("""
+        SELECT quantidade_inicial, quantidade_atual, mortalidade_total, peso_medio_atual
+        FROM lotes
+        WHERE id = ?
+    """, (lote_id,))
+    lote = cursor.fetchone()
+
+    if not lote:
+        conexao.close()
+        return None
+
+    cursor.execute("""
+        SELECT COALESCE(SUM(quantidade_kg), 0)
+        FROM racoes
+        WHERE lote_id = ?
+    """, (lote_id,))
+    total_racao = cursor.fetchone()[0]
+
+    cursor.execute("""
+        SELECT
+            COALESCE(SUM(quantidade), 0),
+            COALESCE(SUM(quantidade * peso_medio), 0)
+        FROM saidas
+        WHERE lote_id = ?
+    """, (lote_id,))
+    total_saidas, peso_total_saidas = cursor.fetchone()
+
+    conexao.close()
+
+    quantidade_inicial, quantidade_atual, mortes, peso_medio_atual = lote
+    mortalidade_percentual = 0
+    racao_por_animal = 0
+
+    if quantidade_inicial > 0:
+        mortalidade_percentual = (mortes / quantidade_inicial) * 100
+        racao_por_animal = total_racao / quantidade_inicial
+
+    peso_medio_saida = 0
+    if total_saidas > 0:
+        peso_medio_saida = peso_total_saidas / total_saidas
+
+    return {
+        "quantidade_inicial": quantidade_inicial,
+        "quantidade_atual": quantidade_atual,
+        "mortes": mortes,
+        "mortalidade_percentual": round(mortalidade_percentual, 2),
+        "total_racao": round(total_racao, 2),
+        "racao_por_animal": round(racao_por_animal, 2),
+        "peso_medio_atual": peso_medio_atual,
+        "total_saidas": total_saidas,
+        "peso_medio_saida": round(peso_medio_saida, 2)
+    }
+
+
+def excluir_movimentacao(tipo, registro_id, lote_id):
+    tabelas = {
+        "chegadas": "chegadas",
+        "mortes": "mortes",
+        "racoes": "racoes",
+        "saidas": "saidas"
+    }
+
+    tabela = tabelas.get(tipo)
+    if not tabela:
+        return False, "Tipo de movimentação inválido."
+
+    conexao = conectar()
+    cursor = conexao.cursor()
+
+    try:
+        if tipo == "chegadas":
+            cursor.execute("""
+                SELECT quantidade
+                FROM chegadas
+                WHERE id = ? AND lote_id = ?
+            """, (registro_id, lote_id))
+            chegada = cursor.fetchone()
+
+            if not chegada:
+                return False, "Registro não encontrado."
+
+            cursor.execute("""
+                SELECT COALESCE(SUM(quantidade), 0)
+                FROM chegadas
+                WHERE lote_id = ?
+            """, (lote_id,))
+            total_chegadas = cursor.fetchone()[0]
+            animais_comprometidos = buscar_animais_comprometidos(cursor, lote_id)
+
+            if total_chegadas - chegada[0] < animais_comprometidos:
+                return False, "Não é possível excluir: existem saídas ou mortes usando essa quantidade."
+
+        cursor.execute(f"""
+            DELETE FROM {tabela}
+            WHERE id = ? AND lote_id = ?
+        """, (registro_id, lote_id))
+
+        if cursor.rowcount == 0:
+            return False, "Registro não encontrado."
+
+        conexao.commit()
+
+    except Exception as erro:
+        return False, f"Erro ao excluir registro: {erro}"
+
+    finally:
+        conexao.close()
+
+    if tipo != "racoes":
+        recalcular_peso_medio_lote(lote_id)
+
+    return True, "Registro excluído com sucesso."
 
 
 def recalcular_peso_medio_lote(lote_id):
@@ -232,7 +737,7 @@ def recalcular_peso_medio_lote(lote_id):
 
         cursor.execute("""
             UPDATE lotes
-            SET 
+            SET
                 data_chegada = ?,
                 quantidade_inicial = ?,
                 quantidade_atual = ?,

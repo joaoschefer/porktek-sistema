@@ -4,20 +4,22 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from datetime import date
-from services.lote_service import cadastrar_saida
+from services.lote_service import cadastrar_saida, atualizar_saida
 
 
 class SaidaView(QWidget):
-    def __init__(self, lote_id, tela_lote):
+    def __init__(self, lote_id, tela_lote, registro=None):
         super().__init__()
 
         self.lote_id = lote_id
         self.tela_lote = tela_lote
+        self.registro = registro
 
-        self.setWindowTitle("Cadastrar saída")
+        self.setWindowTitle("Editar saída" if self.registro else "Cadastrar saída")
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
         self.setFixedSize(500, 500)
 
-        self.titulo = QLabel("Cadastrar saída")
+        self.titulo = QLabel("Editar saída" if self.registro else "Cadastrar saída")
         self.titulo.setObjectName("tituloLogin")
         self.titulo.setAlignment(Qt.AlignCenter)
 
@@ -31,7 +33,7 @@ class SaidaView(QWidget):
         self.input_peso.setPlaceholderText("Peso médio final")
         self.input_observacao.setPlaceholderText("Observação")
 
-        self.botao_salvar = QPushButton("Finalizar lote")
+        self.botao_salvar = QPushButton("Salvar saída")
         self.botao_cancelar = QPushButton("Cancelar")
         self.botao_cancelar.setObjectName("botaoSecundario")
 
@@ -52,6 +54,13 @@ class SaidaView(QWidget):
         self.botao_salvar.clicked.connect(self.salvar)
         self.botao_cancelar.clicked.connect(self.close)
 
+        if self.registro:
+            _, data, quantidade, peso, observacao = self.registro
+            self.input_data.setText(str(data))
+            self.input_quantidade.setText(str(quantidade))
+            self.input_peso.setText(str(peso))
+            self.input_observacao.setText(str(observacao or ""))
+
     def salvar(self):
         try:
             data = self.input_data.text().strip()
@@ -59,9 +68,14 @@ class SaidaView(QWidget):
             peso = float(self.input_peso.text().replace(",", "."))
             observacao = self.input_observacao.text().strip()
 
-            sucesso, mensagem = cadastrar_saida(
-                self.lote_id, data, quantidade, peso, observacao
-            )
+            if self.registro:
+                sucesso, mensagem = atualizar_saida(
+                    self.registro[0], self.lote_id, data, quantidade, peso, observacao
+                )
+            else:
+                sucesso, mensagem = cadastrar_saida(
+                    self.lote_id, data, quantidade, peso, observacao
+                )
 
             if sucesso:
                 QMessageBox.information(self, "Sucesso", mensagem)

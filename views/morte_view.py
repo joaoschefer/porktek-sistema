@@ -5,20 +5,22 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIntValidator
 from datetime import date
-from services.lote_service import cadastrar_morte
+from services.lote_service import cadastrar_morte, atualizar_morte
 
 
 class MorteView(QWidget):
-    def __init__(self, lote_id, tela_lote):
+    def __init__(self, lote_id, tela_lote, registro=None):
         super().__init__()
 
         self.lote_id = lote_id
         self.tela_lote = tela_lote
+        self.registro = registro
 
-        self.setWindowTitle("Registrar morte")
+        self.setWindowTitle("Editar morte" if self.registro else "Registrar morte")
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
         self.setFixedSize(500, 500)
 
-        self.titulo = QLabel("Registrar morte")
+        self.titulo = QLabel("Editar morte" if self.registro else "Registrar morte")
         self.titulo.setObjectName("tituloLogin")
         self.titulo.setAlignment(Qt.AlignCenter)
 
@@ -54,6 +56,13 @@ class MorteView(QWidget):
         self.botao_salvar.clicked.connect(self.salvar)
         self.botao_cancelar.clicked.connect(self.close)
 
+        if self.registro:
+            _, data, mossa, causa, observacao = self.registro
+            self.input_data.setText(str(data))
+            self.input_mossa.setText(str(mossa))
+            self.input_causa.setText(str(causa or ""))
+            self.input_observacao.setText(str(observacao or ""))
+
     def salvar(self):
         data = self.input_data.text().strip()
         mossa = self.input_mossa.text().strip()
@@ -66,9 +75,14 @@ class MorteView(QWidget):
 
         mossa = int(mossa)
 
-        sucesso, mensagem = cadastrar_morte(
-            self.lote_id, data, mossa, causa, observacao
-        )
+        if self.registro:
+            sucesso, mensagem = atualizar_morte(
+                self.registro[0], self.lote_id, data, mossa, causa, observacao
+            )
+        else:
+            sucesso, mensagem = cadastrar_morte(
+                self.lote_id, data, mossa, causa, observacao
+            )
 
         if sucesso:
             QMessageBox.information(self, "Sucesso", mensagem)

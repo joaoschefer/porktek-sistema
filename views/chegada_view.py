@@ -1,19 +1,22 @@
 from PySide6.QtWidgets import QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QMessageBox
 from PySide6.QtCore import Qt
 from datetime import date
-from services.lote_service import cadastrar_chegada
+from services.lote_service import cadastrar_chegada, atualizar_chegada
+
 
 class ChegadaView(QWidget):
-    def __init__(self, lote_id, tela_lote):
+    def __init__(self, lote_id, tela_lote, registro=None):
         super().__init__()
 
         self.lote_id = lote_id
         self.tela_lote = tela_lote
+        self.registro = registro
 
-        self.setWindowTitle("Cadastrar chegada")
+        self.setWindowTitle("Editar chegada" if self.registro else "Cadastrar chegada")
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
         self.setFixedSize(500, 500)
 
-        self.titulo = QLabel("Cadastrar chegada")
+        self.titulo = QLabel("Editar chegada" if self.registro else "Cadastrar chegada")
         self.titulo.setObjectName("tituloLogin")
         self.titulo.setAlignment(Qt.AlignCenter)
 
@@ -48,6 +51,13 @@ class ChegadaView(QWidget):
         self.botao_salvar.clicked.connect(self.salvar)
         self.botao_cancelar.clicked.connect(self.close)
 
+        if self.registro:
+            _, data, quantidade, peso, observacao = self.registro
+            self.input_data.setText(str(data))
+            self.input_quantidade.setText(str(quantidade))
+            self.input_peso.setText(str(peso))
+            self.input_observacao.setText(str(observacao or ""))
+
     def salvar(self):
         try:
             data = self.input_data.text().strip()
@@ -55,9 +65,14 @@ class ChegadaView(QWidget):
             peso = float(self.input_peso.text().replace(",", "."))
             observacao = self.input_observacao.text().strip()
 
-            sucesso, mensagem = cadastrar_chegada(
-                self.lote_id, data, quantidade, peso, observacao
-            )
+            if self.registro:
+                sucesso, mensagem = atualizar_chegada(
+                    self.registro[0], self.lote_id, data, quantidade, peso, observacao
+                )
+            else:
+                sucesso, mensagem = cadastrar_chegada(
+                    self.lote_id, data, quantidade, peso, observacao
+                )
 
             if sucesso:
                 QMessageBox.information(self, "Sucesso", mensagem)
