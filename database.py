@@ -104,6 +104,26 @@ def migrar_tabela_lotes(cursor):
     cursor.execute("DROP TABLE lotes_antiga")
 
 
+def migrar_tabela_chegadas(cursor):
+    cursor.execute("PRAGMA table_info(chegadas)")
+    colunas = cursor.fetchall()
+    nomes_colunas = [coluna[1] for coluna in colunas]
+
+    if not nomes_colunas:
+        return
+
+    if "mossa" not in nomes_colunas:
+        cursor.execute("ALTER TABLE chegadas ADD COLUMN mossa INTEGER")
+
+    if "peso_total" not in nomes_colunas:
+        cursor.execute("ALTER TABLE chegadas ADD COLUMN peso_total REAL")
+        cursor.execute("""
+            UPDATE chegadas
+            SET peso_total = quantidade * COALESCE(peso_medio, 0)
+            WHERE peso_total IS NULL
+        """)
+
+
 def criar_banco():
     conexao = conectar()
     cursor = conexao.cursor()
@@ -143,13 +163,17 @@ def criar_banco():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             lote_id INTEGER NOT NULL,
             data TEXT NOT NULL,
+            mossa INTEGER,
             quantidade INTEGER NOT NULL,
+            peso_total REAL,
             peso_medio REAL,
             observacao TEXT,
             criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (lote_id) REFERENCES lotes(id)       
         )
     """)
+
+    migrar_tabela_chegadas(cursor)
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS mortes (
@@ -187,6 +211,18 @@ def criar_banco():
             quantidade INTEGER NOT NULL,
             peso_medio REAL,
             observacao TEXT,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (lote_id) REFERENCES lotes(id)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS observacoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lote_id INTEGER NOT NULL,
+            observacao TEXT,
+            data_inicio TEXT,
+            data_termino TEXT,
             criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (lote_id) REFERENCES lotes(id)
         )

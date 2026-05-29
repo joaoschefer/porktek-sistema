@@ -1,10 +1,16 @@
 from PySide6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableWidget, QTableWidgetItem, QFrame, QHeaderView,
-    QGridLayout, QScrollArea
+    QGridLayout, QScrollArea, QSizePolicy
 )
-from PySide6.QtCore import Qt
-from services.lote_service import buscar_lote_dashboard, buscar_lotes_finalizados
+from PySide6.QtCore import Qt, QMargins
+from PySide6.QtGui import QPainter
+from PySide6.QtCharts import QChart, QChartView, QBarSeries, QBarSet, QBarCategoryAxis, QValueAxis
+from services.lote_service import (
+    buscar_lote_dashboard,
+    buscar_lotes_finalizados,
+    buscar_mortalidade_lotes_finalizados
+)
 from config.window_config import (
     DEFAULT_WIDTH,
     DEFAULT_HEIGHT,
@@ -32,6 +38,7 @@ class DashboardView(QWidget):
         self.tabela_lotes.cellDoubleClicked.connect(self.abrir_lote_finalizado)
 
         self.carregar_lote_ativo()
+        self.carregar_grafico_mortalidade()
         self.carregar_lotes_finalizados()
 
     def montar_interface(self):
@@ -41,6 +48,7 @@ class DashboardView(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         conteudo = QWidget()
         layout_principal = QVBoxLayout()
@@ -125,6 +133,28 @@ class DashboardView(QWidget):
         titulo_finalizados.setObjectName("secaoDashboard")
         layout_principal.addWidget(titulo_finalizados)
 
+        self.painel_grafico_mortalidade = QFrame()
+        self.painel_grafico_mortalidade.setObjectName("painelDashboard")
+        self.painel_grafico_mortalidade.setMaximumHeight(300)
+        self.painel_grafico_mortalidade.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        grafico_layout = QVBoxLayout()
+        grafico_layout.setSpacing(12)
+
+        titulo_grafico = QLabel("Mortalidade dos lotes")
+        titulo_grafico.setObjectName("secaoDashboard")
+
+        self.grafico_mortalidade = QChartView()
+        self.grafico_mortalidade.setRenderHint(QPainter.Antialiasing)
+        self.grafico_mortalidade.setMinimumHeight(190)
+        self.grafico_mortalidade.setMaximumHeight(220)
+
+        grafico_layout.addWidget(titulo_grafico)
+        grafico_layout.addWidget(self.grafico_mortalidade)
+        self.painel_grafico_mortalidade.setLayout(grafico_layout)
+
+        layout_principal.addWidget(self.painel_grafico_mortalidade)
+
         finalizados_acoes_layout = QHBoxLayout()
         finalizados_acoes_layout.addStretch()
 
@@ -141,7 +171,7 @@ class DashboardView(QWidget):
         self.tabela_lotes.setHorizontalHeaderLabels([
             "ID",
             "Código",
-            "Data chegada",
+            "Data média chegada",
             "Data finalização",
             "Qtd inicial",
             "Qtd atual",
@@ -153,6 +183,9 @@ class DashboardView(QWidget):
         self.tabela_lotes.verticalHeader().setVisible(False)
         self.tabela_lotes.setEditTriggers(QTableWidget.NoEditTriggers)
         self.tabela_lotes.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabela_lotes.setMinimumHeight(240)
+        self.tabela_lotes.setMaximumHeight(320)
+        self.tabela_lotes.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         layout_principal.addWidget(self.tabela_lotes)
 
@@ -197,7 +230,7 @@ class DashboardView(QWidget):
 
             texto = "Aguardando primeira chegada"
             if data_chegada:
-                texto = f"Lote iniciado em {data_chegada}"
+                texto = f"Data média de chegada: {data_chegada}"
 
             self.lote_ativo_label.setText(texto)
             self.card_codigo["valor"].setText(str(codigo))
@@ -210,6 +243,44 @@ class DashboardView(QWidget):
             self.card_qtd_inicial["valor"].setText("-")
             self.card_qtd_atual["valor"].setText("-")
             self.card_peso["valor"].setText("-")
+
+    def carregar_grafico_mortalidade(self):
+        dados = buscar_mortalidade_lotes_finalizados()
+
+        barras = QBarSet("Mortalidade (%)")
+        categorias = []
+
+        for item in dados:
+            barras.append(item["percentual"])
+            categorias.append(str(item["codigo"]))
+
+        series = QBarSeries()
+        series.append(barras)
+
+        chart = QChart()
+        chart.addSeries(series)
+        chart.setTitle("")
+        chart.setTheme(QChart.ChartThemeDark)
+        chart.setAnimationOptions(QChart.SeriesAnimations)
+        chart.legend().setVisible(False)
+        chart.setMargins(QMargins(0, 0, 0, 0))
+
+        eixo_x = QBarCategoryAxis()
+        eixo_x.append(categorias)
+        chart.addAxis(eixo_x, Qt.AlignBottom)
+        series.attachAxis(eixo_x)
+
+        maior_percentual = max([item["percentual"] for item in dados], default=0)
+        limite_y = max(1, maior_percentual + 0.2)
+
+        eixo_y = QValueAxis()
+        eixo_y.setTitleText("Mortalidade (%)")
+        eixo_y.setLabelFormat("%.1f")
+        eixo_y.setRange(0, limite_y)
+        chart.addAxis(eixo_y, Qt.AlignLeft)
+        series.attachAxis(eixo_y)
+
+        self.grafico_mortalidade.setChart(chart)
 
     def abrir_criar_lote(self):
         from views.create_lote_view import CreateLoteView

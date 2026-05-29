@@ -34,7 +34,8 @@ class LoteAtualView(QWidget):
             "chegadas": [],
             "mortes": [],
             "racoes": [],
-            "saidas": []
+            "saidas": [],
+            "observacoes": []
         }
 
         titulo_janela = "Sistema de Suínos - Detalhe do Lote" if self.somente_leitura else "Sistema de Suínos - Lote Ativo"
@@ -117,7 +118,7 @@ class LoteAtualView(QWidget):
         titulo_info.setObjectName("secaoDashboard")
 
         self.label_codigo = QLabel("Código: -")
-        self.label_data = QLabel("Data de chegada: -")
+        self.label_data = QLabel("Data média de chegada: -")
         self.label_status = QLabel("Status: -")
         self.label_finalizacao = QLabel("Data de finalização: -")
         self.label_peso = QLabel("Peso médio atual: -")
@@ -169,12 +170,14 @@ class LoteAtualView(QWidget):
         self.botao_morte = QPushButton("Registrar morte")
         self.botao_racao = QPushButton("Registrar ração")
         self.botao_saida = QPushButton("Cadastrar saída")
+        self.botao_observacao = QPushButton("Registrar observação")
         self.botao_finalizar = QPushButton("Finalizar lote")
 
         self.botao_chegada.setObjectName("botaoSecundario")
         self.botao_morte.setObjectName("botaoSecundario")
         self.botao_racao.setObjectName("botaoSecundario")
         self.botao_saida.setObjectName("botaoSecundario")
+        self.botao_observacao.setObjectName("botaoSecundario")
         self.botao_finalizar.setObjectName("botaoSair")
 
         for botao in (
@@ -182,6 +185,7 @@ class LoteAtualView(QWidget):
             self.botao_morte,
             self.botao_racao,
             self.botao_saida,
+            self.botao_observacao,
             self.botao_finalizar
         ):
             botao.setMinimumHeight(44)
@@ -193,6 +197,7 @@ class LoteAtualView(QWidget):
         acoes_layout.addWidget(self.botao_morte)
         acoes_layout.addWidget(self.botao_racao)
         acoes_layout.addWidget(self.botao_saida)
+        acoes_layout.addWidget(self.botao_observacao)
         acoes_layout.addWidget(self.botao_finalizar)
         acoes_layout.addStretch()
 
@@ -220,7 +225,7 @@ class LoteAtualView(QWidget):
         self.abas_historico.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.tabela_chegadas = self.criar_tabela([
-            "Data", "Quantidade", "Peso médio", "Observação"
+            "Data", "Mossa", "Quantidade", "Peso total", "Peso médio", "Observação"
         ])
         self.tabela_mortes = self.criar_tabela([
             "Data", "Mossa", "Causa", "Observação"
@@ -231,11 +236,15 @@ class LoteAtualView(QWidget):
         self.tabela_saidas = self.criar_tabela([
             "Data", "Quantidade", "Peso médio", "Observação"
         ])
+        self.tabela_observacoes = self.criar_tabela([
+            "Observação", "Data início", "Data término"
+        ])
 
         self.abas_historico.addTab(self.tabela_chegadas, "Chegadas")
         self.abas_historico.addTab(self.tabela_mortes, "Mortes")
         self.abas_historico.addTab(self.tabela_racoes, "Rações")
         self.abas_historico.addTab(self.tabela_saidas, "Saídas")
+        self.abas_historico.addTab(self.tabela_observacoes, "Observações")
 
         botoes_historico = QHBoxLayout()
         botoes_historico.setContentsMargins(0, 12, 0, 0)
@@ -268,6 +277,7 @@ class LoteAtualView(QWidget):
         self.botao_morte.clicked.connect(self.abrir_morte)
         self.botao_racao.clicked.connect(self.abrir_racao)
         self.botao_saida.clicked.connect(self.abrir_saida)
+        self.botao_observacao.clicked.connect(self.abrir_observacao)
         self.botao_finalizar.clicked.connect(self.finalizar_lote_atual)
         self.botao_voltar.clicked.connect(self.voltar_dashboard)
         self.botao_editar.clicked.connect(self.editar_movimentacao)
@@ -340,7 +350,7 @@ class LoteAtualView(QWidget):
 
             data_chegada_texto = data_chegada if data_chegada else "Aguardando primeira chegada"
             self.label_codigo.setText(f"Código: {nome}")
-            self.label_data.setText(f"Data de chegada: {data_chegada_texto}")
+            self.label_data.setText(f"Data média de chegada: {data_chegada_texto}")
             self.label_status.setText(f"Status: {status}")
             data_finalizacao_texto = data_finalizacao if data_finalizacao else "-"
             self.label_finalizacao.setText(f"Data de finalização: {data_finalizacao_texto}")
@@ -358,7 +368,7 @@ class LoteAtualView(QWidget):
             self.card_peso["valor"].setText("-")
 
             self.label_codigo.setText("Código: -")
-            self.label_data.setText("Data de chegada: -")
+            self.label_data.setText("Data média de chegada: -")
             self.label_status.setText("Status: -")
             self.label_finalizacao.setText("Data de finalização: -")
             self.label_peso.setText("Peso médio atual: -")
@@ -379,6 +389,7 @@ class LoteAtualView(QWidget):
         self.preencher_tabela(self.tabela_mortes, self.historico["mortes"])
         self.preencher_tabela(self.tabela_racoes, self.historico["racoes"])
         self.preencher_tabela(self.tabela_saidas, self.historico["saidas"])
+        self.preencher_tabela(self.tabela_observacoes, self.historico["observacoes"])
 
     def carregar_resumo(self):
         resumo = buscar_resumo_lote(self.lote_id)
@@ -409,10 +420,11 @@ class LoteAtualView(QWidget):
         self.tabela_mortes.setRowCount(0)
         self.tabela_racoes.setRowCount(0)
         self.tabela_saidas.setRowCount(0)
+        self.tabela_observacoes.setRowCount(0)
 
     def tipo_historico_atual(self):
         indice = self.abas_historico.currentIndex()
-        tipos = ["chegadas", "mortes", "racoes", "saidas"]
+        tipos = ["chegadas", "mortes", "racoes", "saidas", "observacoes"]
         return tipos[indice]
 
     def tabela_historico_atual(self):
@@ -421,7 +433,8 @@ class LoteAtualView(QWidget):
             self.tabela_chegadas,
             self.tabela_mortes,
             self.tabela_racoes,
-            self.tabela_saidas
+            self.tabela_saidas,
+            self.tabela_observacoes
         ]
         return tabelas[indice]
 
@@ -458,9 +471,12 @@ class LoteAtualView(QWidget):
         elif tipo == "racoes":
             from views.racao_view import RacaoView
             self.janela_edicao = RacaoView(self.lote_id, self, registro)
-        else:
+        elif tipo == "saidas":
             from views.saida_view import SaidaView
             self.janela_edicao = SaidaView(self.lote_id, self, registro)
+        else:
+            from views.observacao_view import ObservacaoView
+            self.janela_edicao = ObservacaoView(self.lote_id, self, registro)
 
         self.janela_edicao.show()
 
@@ -515,6 +531,13 @@ class LoteAtualView(QWidget):
         if self.lote_id:
             self.janela_saida = SaidaView(self.lote_id, self)
             self.janela_saida.show()
+
+    def abrir_observacao(self):
+        from views.observacao_view import ObservacaoView
+
+        if self.lote_id:
+            self.janela_observacao = ObservacaoView(self.lote_id, self)
+            self.janela_observacao.show()
 
     def finalizar_lote_atual(self):
         if not self.lote_id:
