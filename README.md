@@ -25,10 +25,6 @@ Ele se conecta ao backend principal do PorkTek, compartilhando a mesma base de d
 
 ![Tela de entrada](entrar.png)
 
-### Cadastro
-
-![Tela de cadastro](cadastro.png)
-
 ### Registro
 
 ![Tela de registro](registro.png)
@@ -40,6 +36,10 @@ Ele se conecta ao backend principal do PorkTek, compartilhando a mesma base de d
 ### Novo lote
 
 ![Tela de novo lote](novolote.png)
+
+### Cadastro de dados no lote
+
+![Tela de cadastro](cadastro.png)
 
 ### Finalizar lote
 
