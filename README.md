@@ -1,6 +1,6 @@
-# PorkTek - Sistema No-Code
+# PorkTek - Sistema
 
-Este repositorio apresenta imagens do sistema no-code desenvolvido para o projeto PorkTek. O sistema utiliza o mesmo backend do aplicativo PorkTek, criado como Trabalho de Conclusao de Curso (TCC).
+Este repositorio apresenta imagens do sistema desenvolvido para o projeto PorkTek. O sistema utiliza o mesmo backend do aplicativo PorkTek, criado como Trabalho de Conclusao de Curso (TCC).
 
 O objetivo desta versao e mostrar o funcionamento visual da plataforma. O codigo-fonte e privado e nao esta disponivel publicamente neste repositorio.
 
