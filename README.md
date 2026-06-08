@@ -47,7 +47,7 @@ Ele se conecta ao backend principal do PorkTek, compartilhando a mesma base de d
 
 ## Acesso ao codigo
 
-O codigo deste sistema e privado. Caso tenha interesse em conhecer melhor o projeto, acessar o codigo ou conversar sobre a solucao, entre em contato pelo meu perfil do GitHub.
+O codigo deste sistema e privado. Caso tenha interesse em conhecer melhor o projeto, acessar o codigo ou conversar sobre a solucao, entre em contato comigo.
 
 ## Observacao
 
